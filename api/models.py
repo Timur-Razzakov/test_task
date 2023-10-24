@@ -1,43 +1,72 @@
-from django.contrib.auth.base_user import BaseUserManager
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.base_user import BaseUserManager, AbstractBaseUser
+from django.contrib.auth.models import Permission
 from django.db import models
 
 
-# Create your models here.
+class MyUserManager(BaseUserManager):
+    def create_user(self, email, username, password=None):
+        """
+        Создаёт пользователя с указанным username
+        """
+        if not email:
+            raise ValueError('User must have an email address')
 
+        user = self.model(
+            email=self.normalize_email(email),
+            username=username,
+        )
 
-class CustomUserManager(BaseUserManager):
-    def create_user(self, email, password, **extra_fields):
-        email = self.normalize_email(email)
-
-        user = self.model(email=email, **extra_fields)
-
-        user.set_password(password)
-
-        user.save()
-
+        user.set_password(password)  # зашифровывает пароль
+        user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, password, **extra_fields):
-        extra_fields.setdefault("is_staff", True)
-        extra_fields.setdefault("is_superuser", True)
+    def create_superuser(self, email, username, password=None):
+        """
+        Создаёт супер пользователя для доступа к админке
+        """
+        user = self.create_user(
+            email,
+            username=username,
+            password=password
+        )
+        user.is_admin = True
+        user.save(using=self._db)
+        return user
 
-        if extra_fields.get("is_staff") is not True:
-            raise ValueError("Superuser has to have is_staff being True")
 
-        if extra_fields.get("is_superuser") is not True:
-            raise ValueError("Superuser has to have is_superuser being True")
+class MyUser(AbstractBaseUser):
+    email = models.EmailField(
+        verbose_name='email',
+        max_length=255,
+        unique=True,
+    )
+    username = models.CharField(
+        verbose_name='username',
+        max_length=255,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    list_display = ('email', 'username', 'is_admin')
 
-        return self.create_user(email=email, password=password, **extra_fields)
+    is_admin = models.BooleanField(default=False)
+    objects = MyUserManager()
 
-
-class User(AbstractUser):
-    email = models.CharField(max_length=80, unique=True)
-    username = models.CharField(max_length=45)
-
-    objects = CustomUserManager()
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["username"]
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
 
     def __str__(self):
-        return self.username
+        return self.email
+
+    def has_perm(self, perm, obj=None):
+        """проверяет есть ли у пользователя указанное разрешение """
+        # Simplest possible answer: Yes, always
+        return True
+
+    def has_module_perms(self, app_label):
+        """есть  ли у пользователя разрешение на доступ к моделям в данном приложении. """
+        # Simplest possible answer: Yes, always
+        return True
+
+    @property
+    def is_staff(self):
+        """ Является ли пользователь администратором """
+        return self.is_admin

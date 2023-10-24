@@ -1,14 +1,20 @@
 from django.urls import path
-from rest_framework import routers
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+    TokenVerifyView,
+)
 
-from .views import *
+from . import views
 
-# urlpatterns = [
-#     path('registration/', RegistrationView.as_view(), name='registration'),
-#     path('verify_code/', VerifyCode.as_view(), name='verify_code'),
-#     path('referral/', ReferralAPIView.as_view(), name='referral'),
-# ]
-# router = routers.DefaultRouter()
-# router.register('registration', RegistrationView.as_view(),)
-# router.register('verify_code', VerifyCode.as_view(),)
-# router.register('referral', ReferralAPIView.as_view(),)
+urlpatterns = [
+    path("signup/", views.SignUpView.as_view(), name="signup"),
+    path("login/", views.LoginView.as_view(), name="login"),
+    path("all_users/", views.ListUsersView.as_view(), name="all_users"),
+    path("all_users/<int:pk>/", views.UserView.as_view(), name="edit_user"),
+    path("search/<str:username>/", views.UserSearchView.as_view(), name="search"),
+    # JWT
+    path("jwt/create/", TokenObtainPairView.as_view(), name="jwt_create"),
+    path("jwt/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("jwt/verify/", TokenVerifyView.as_view(), name="token_verify"),
+]

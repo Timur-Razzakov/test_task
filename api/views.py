@@ -41,7 +41,6 @@ class LoginView(APIView):
         password = request.data.get("password")
 
         user = authenticate(email=email, password=password)
-        login(request, user)
         if user is not None:
             # создаём токен для авторизации
             tokens = create_jwt_pair_for_user(user)
@@ -61,7 +60,7 @@ class LoginView(APIView):
 class ListUsersView(generics.ListAPIView):
     """Выводим пользователей"""
     serializer_class = UserListSerializer
-    permission_classes = []  # IsAuthenticated
+    permission_classes = [IsAuthenticated]  # IsAuthenticated
 
     def get_queryset(self):
         return User.objects.all()
@@ -70,7 +69,7 @@ class ListUsersView(generics.ListAPIView):
 class UserView(generics.RetrieveUpdateDestroyAPIView):
     """Редактирование пользователя"""
     serializer_class = SignUpSerializer
-    permission_classes = []  # IsAuthenticated
+    permission_classes = [IsAuthenticated]  #
 
     def get_queryset(self):
         return User.objects.all()
@@ -78,7 +77,7 @@ class UserView(generics.RetrieveUpdateDestroyAPIView):
 
 class UserSearchView(APIView):
     """Поиск по имени"""
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, username):
         try:
@@ -86,4 +85,3 @@ class UserSearchView(APIView):
             return Response({"username": user.username, "email": user.email}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response({"message": "Пользователь не найден"}, status=status.HTTP_404_NOT_FOUND)
-

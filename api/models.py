@@ -30,6 +30,7 @@ class MyUserManager(BaseUserManager):
             password=password
         )
         user.is_admin = True
+        user.is_superuser = True
         user.save(using=self._db)
         return user
 
@@ -48,6 +49,7 @@ class MyUser(AbstractBaseUser, PermissionsMixin):
     list_display = ('email', 'username', 'is_admin')
 
     is_admin = models.BooleanField(default=False)
+
     objects = MyUserManager()
 
     USERNAME_FIELD = 'email'

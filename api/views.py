@@ -1,6 +1,7 @@
 import logging
 
-from django.contrib.auth import authenticate, get_user_model, login
+from django.contrib.auth import authenticate, get_user_model
+from django.db.models import F, Value, CharField
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.request import Request
@@ -8,7 +9,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import (
     IsAuthenticated)
-from .serializers import SignUpSerializer, UserListSerializer, LoginSerializer
+from rest_framework.filters import OrderingFilter
+
+from .serializers import SignUpSerializer, UserListSerializer, LoginSerializer, UpdateSerializer
 from .tokens import create_jwt_pair_for_user
 
 User = get_user_model()
@@ -16,12 +19,14 @@ User = get_user_model()
 # Создайте логгер
 logger = logging.getLogger(__name__)
 
+
 #  python manage.py spectacular --file schema.yml
 
 # TODO: filter and sort user
 # TODO: Check RESTFULL API
 # TODO: Readme
 # TODO: PEP8 check
+# TODO: check show swagger
 
 class SignUpView(generics.GenericAPIView):
     """Проводим регистрацию"""
@@ -81,14 +86,28 @@ class ListUsersView(generics.ListAPIView):
     """Выводим пользователей"""
     serializer_class = UserListSerializer
     permission_classes = [IsAuthenticated]  # IsAuthenticated
+    # сортируем по имени и почте
+    queryset = User.objects.annotate(
+        lower_username=F('username'),
+    ).values(
+        'id',
+        'username',
+        'email',
+    ).annotate(
+        order=Value('', CharField()),
+    ).order_by('order')
+    filter_backends = [OrderingFilter]
+    ordering_fields = ['username', 'email']
 
     def get_queryset(self):
         return User.objects.all()
 
 
+#
+
 class UserView(generics.RetrieveUpdateDestroyAPIView):
     """Редактирование пользователя"""
-    serializer_class = SignUpSerializer
+    serializer_class = UpdateSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):

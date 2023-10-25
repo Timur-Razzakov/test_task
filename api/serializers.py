@@ -39,7 +39,7 @@ class LoginSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MyUser
-        fields = ["email", "username"]
+        fields = ["email", "password"]
 
 
 class UpdateSerializer(serializers.ModelSerializer):

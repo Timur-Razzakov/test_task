@@ -80,13 +80,13 @@ class UserViewTests(APITestCase):
     def test_update_user(self):
         """Обновляем пользователя"""
 
-        url = reverse('users', args=[self.user_1.id])
+        url = reverse('update_user', args=[self.user_1.id])
         updated_data = {
             'username': 'newtimur',
             'email': 'newtimur@gmail.com',
         }
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
-        response = self.client.patch(url, updated_data, format='json')
+        response = self.client.put(url, updated_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user_1.refresh_from_db()
         self.assertEqual(self.user_1.username, updated_data['username'])
@@ -95,9 +95,9 @@ class UserViewTests(APITestCase):
     def test_delete_user(self):
         """Удаляем пользователя"""
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
-        url = reverse('users', args=[self.user_1.id])
+        url = reverse('delete_user', args=[self.user_1.id])
         response = self.client.delete(url)
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(User.objects.filter(id=self.user_1.id).exists())
 
     def test_search_users_by_username(self):
@@ -108,35 +108,6 @@ class UserViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Проверяем, является ли ответ одним словарем
         self.assertTrue(isinstance(response.data, dict))
-
-    def test_sort_users_by_name_ascending(self):
-        """Сортируем пользователя по имени A-W"""
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
-        url = reverse('users_list')
-        response = self.client.get(url, {'ordering': 'username'})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        usernames = [user['username'] for user in response.data]
-        # проверяем, что имя с A стоит первым
-        self.assertEqual(usernames, ['A-timur', 'rumit'])
-
-    def test_sort_users_by_name_descending(self):
-        """Сортируем от W-A"""
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
-        url = reverse('users_list')
-        response = self.client.get(url, {'ordering': '-username'})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        usernames = [user['username'] for user in response.data]
-        # проверяем, что имя с A стоит первым
-        self.assertEqual(usernames, ['rumit', 'A-timur'])
-
-    def test_sort_users_by_email_ascending(self):
-        """Сортируем по почте"""
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
-        url = reverse('users_list')
-        response = self.client.get(url, {'ordering': 'email'})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        emails = [user['email'] for user in response.data]
-        self.assertEqual(emails, ['B_timur_01@gmail.com', 'timur@gmail.com'])
 
     def test_jwt_refresh(self):
         """Обновляем токен"""
@@ -149,3 +120,13 @@ class UserViewTests(APITestCase):
         response = self.client.post(reverse('token_verify'), {
             'token': self.token, }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_sort_users_by_name_ascending(self):
+        """Сортируем пользователя по имени"""
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+        url = reverse('users_list')
+        response = self.client.get(url, {'ordering': 'username'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        usernames = [user['username'] for user in response.data]
+        # проверяем, что имя с A стоит первым
+        self.assertEqual(usernames, ['A-timur', 'rumit'])

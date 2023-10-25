@@ -1,4 +1,4 @@
-# CRUD user сервис
+# CRUD user сервис используя SQL запросы к бд
 
 Сервис разработан на django rest framework
 
@@ -102,17 +102,12 @@ sudo docker-compose stop
 
 ```http://0.0.0.0:8000/users_list/<int:pk>``` - Выводим указанного пользователя по id
 
-```http://0.0.0.0:8000/users_list/<int:pk>``` - Удаление пользователя
+```http://0.0.0.0:8000/delete_user/<int:pk>``` - Удаление пользователя
 
-```http://0.0.0.0:8000/users_list/<str:username>``` - Ищем пользователя по имени
+```http://0.0.0.0:8000/update_user/<int:pk>``` - обновление пользователя
 
-```http://0.0.0.0:8000/users_list/ordering:username>``` - Сортировка по имени
+```http://0.0.0.0:8000/search_user/<str:username>``` - Ищем пользователя по имени
 
-```http://0.0.0.0:8000/users_list/ordering:-username>``` - Сортировка по имени в обратном порядке
-
-```http://0.0.0.0:8000/users_list/ordering:mail>``` - Сортировка по почте
-
-```http://0.0.0.0:8000/users_list/ordering:-mail>``` - Сортировка по почте в обратном порядке
 
 ```http://0.0.0.0:8000/jwt/create/``` - Создаём токен для пользователя
 

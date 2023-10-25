@@ -9,6 +9,7 @@ User = get_user_model()
 class UserViewTests(APITestCase):
     """Создаём тестовые данные"""
     token = None  # Атрибут для хранения токена
+    token_refresh = None  # Атрибут для хранения refresh токена
 
     def setUp(self):
         self.user_data = {
@@ -26,6 +27,7 @@ class UserViewTests(APITestCase):
             'password': self.user_data['password']}, format='json')
         # сохраняем access токен для дальнейшего использования
         self.token = response.data['access']
+        self.token_refresh = response.data['refresh']
 
         self.user_data_1 = {
             'username': 'rumit',
@@ -107,7 +109,7 @@ class UserViewTests(APITestCase):
         # Проверяем, является ли ответ одним словарем
         self.assertTrue(isinstance(response.data, dict))
 
-    def test_sort_users_by_name(self):
+    def test_sort_users_by_name_ascending(self):
         """Сортируем пользователя по имени A-W"""
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
         url = reverse('users_list')
@@ -117,7 +119,7 @@ class UserViewTests(APITestCase):
         # проверяем, что имя с A стоит первым
         self.assertEqual(usernames, ['A-timur', 'rumit'])
 
-    def test_sort_users_by_name_W_A(self):
+    def test_sort_users_by_name_descending(self):
         """Сортируем от W-A"""
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
         url = reverse('users_list')
@@ -127,7 +129,7 @@ class UserViewTests(APITestCase):
         # проверяем, что имя с A стоит первым
         self.assertEqual(usernames, ['rumit', 'A-timur'])
 
-    def test_sort_users_by_email(self):
+    def test_sort_users_by_email_ascending(self):
         """Сортируем по почте"""
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
         url = reverse('users_list')
@@ -136,3 +138,14 @@ class UserViewTests(APITestCase):
         emails = [user['email'] for user in response.data]
         self.assertEqual(emails, ['B_timur_01@gmail.com', 'timur@gmail.com'])
 
+    def test_jwt_refresh(self):
+        """Обновляем токен"""
+        response = self.client.post(reverse('token_refresh'), {
+            'refresh': self.token_refresh, }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_jwt_verify(self):
+        """Проверяем действительность токена"""
+        response = self.client.post(reverse('token_verify'), {
+            'token': self.token, }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

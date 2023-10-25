@@ -1,18 +1,15 @@
 import logging
 
-from django.contrib.auth import authenticate, get_user_model
-from django.db.models import F, Value, CharField
-from drf_spectacular.utils import extend_schema
-from rest_framework import generics, status
-from rest_framework.filters import OrderingFilter
-from rest_framework.permissions import (
-    IsAuthenticated)
-from rest_framework.request import Request
+from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
+from django.db import connection, IntegrityError
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import SignUpSerializer, UserListSerializer, LoginSerializer, UpdateSerializer
-from .tokens import create_jwt_pair_for_user
+from api.tokens import create_jwt_pair_for_user
 
 User = get_user_model()
 
@@ -20,102 +17,166 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-#  python manage.py spectacular --file schema.yml
-
-# TODO: Readme
-# TODO: PEP8 check
-class SignUpView(generics.GenericAPIView):
-    """Проводим регистрацию"""
-    serializer_class = SignUpSerializer
+# Создаём CRUD используя SQL запросы
+class CreateUserView(APIView):
+    """Создание пользователя"""
     permission_classes = []
 
-    def post(self, request: Request):
-        data = request.data
+    def post(self, request):
+        username = request.data.get("username")
+        email = request.data.get("email")
+        password = request.data.get("password")
+        # Кешируем пароль
+        hashed_password = make_password(password)
 
-        serializer = self.serializer_class(data=data)
+        # получаем время для добавления в created_at
+        current_datetime = timezone.now()
 
-        if serializer.is_valid():
-            serializer.save()
-            logger.info('Successful created user:  %s', serializer.data)
-            response = {"message": "User Created Successfully", "data": serializer.data}
-
-            return Response(data=response, status=status.HTTP_201_CREATED)
-        logger.error('serializer is not valid:  %s', serializer.data)
-        return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO api_myuser (username, email, password,created_at,is_admin, "
+                "is_superuser) VALUES (%s, %s, %s, %s,%s,%s)",
+                [username, email, hashed_password, current_datetime, False, False]
+            )
+        logger.info('Successful created user', )
+        return Response({"message": "User Created Successfully"}, status=status.HTTP_201_CREATED)
 
 
 class LoginView(APIView):
-    """Получаем токен, для авторизации"""
     permission_classes = []
-    serializer_class = LoginSerializer
 
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
-        user = authenticate(request, email=email, password=password)
-        if user is not None:
-            # создаём токен для авторизации
-            tokens = create_jwt_pair_for_user(user)
-            logger.info('Successful created token for user', )
-            response = {"message": "Login Successfully", "tokens": tokens}
-            return Response(data=response, status=status.HTTP_200_OK)
+
+        # Поиск пользователя по email
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM auth_user WHERE email = %s",
+                [email]
+            )
+            user_data = cursor.fetchone()
+
+        if user_data:
+            user = User.objects.get(pk=user_data[0])
+
+            # Проверка пароль
+            if make_password(password) == user_data[1]:
+                tokens = create_jwt_pair_for_user(user)
+                logger.info(f'Successful created token for user: {user.username}')
+                response = {"message": "Login Successfully", "tokens": tokens}
+                return Response(data=response, status=status.HTTP_200_OK)
+            else:
+                logger.error(f'Invalid email or password for user: {user.username}')
+                return Response(data={"message": "Invalid email or password"},
+                                status=status.HTTP_401_UNAUTHORIZED)
         else:
-            logger.error('Invalid email or password for user:  ', )
-            return Response(data={"message": "Invalid email or password"},
-                            status=status.HTTP_401_UNAUTHORIZED)
+            return Response(data={"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
     def get(self, request):
-        # выводим информацию об авторизованном пользователе
         content = {"user": str(request.user), "auth": str(request.auth)}
         return Response(data=content, status=status.HTTP_200_OK)
 
 
-class ListUsersView(generics.ListAPIView):
-    """Выводим пользователей"""
-    serializer_class = UserListSerializer
-    permission_classes = [IsAuthenticated]  # IsAuthenticated
-    # сортируем по имени и почте
-    queryset = User.objects.annotate(
-        lower_username=F('username'),
-    ).values(
-        'id',
-        'username',
-        'email',
-    ).annotate(
-        order=Value('', CharField()),
-    ).order_by('order')
-    filter_backends = [OrderingFilter]
-    ordering_fields = ['username', 'email']
-
-    def get_queryset(self):
-        queryset = User.objects.all()
-        username_filter = self.request.query_params.get('username')
-        if username_filter:
-            queryset = queryset.filter(username__icontains=username_filter)
-        return queryset
-
-
-#
-
-class UserView(generics.RetrieveUpdateDestroyAPIView):
-    """Редактирование пользователя"""
-    serializer_class = UpdateSerializer
+class GetAllUsersView(APIView):
+    """Получаем всех пользователей"""
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        return User.objects.all()
+    def get(self, request):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id, username, email FROM api_myuser")
+            users_data = cursor.fetchall()
+
+        users = []
+        for user_data in users_data:
+            user = {
+                "id": user_data[0],
+                "username": user_data[1],
+                "email": user_data[2],
+            }
+            users.append(user)
+
+        return Response(users, status=status.HTTP_200_OK)
 
 
-class UserSearchView(APIView):
-    """Поиск по имени"""
+class GetUserView(APIView):
+    """Получаем пользователя"""
     permission_classes = [IsAuthenticated]
 
-    # для избавления от ошибки 'unable to guess serializer' при использовании swagger-ра
-    @extend_schema(responses=UserListSerializer)
+    def get(self, request, pk):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, username, email FROM api_myuser WHERE id = %s",
+                [pk]
+            )
+            user_data = cursor.fetchone()
+
+        if user_data:
+            user = {
+                "id": user_data[0],
+                "username": user_data[1],
+                "email": user_data[2],
+            }
+            return Response(user, status=status.HTTP_200_OK)
+        else:
+            return Response({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class UpdateUserView(APIView):
+    """Обновление пользователя"""
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        username = request.data.get("username")
+        email = request.data.get("email")
+        password = request.data.get("password")
+        hashed_password = make_password(password)
+        with connection.cursor() as cursor:
+            try:
+                cursor.execute(
+                    "UPDATE api_myuser SET username = %s, email = %s, password = %s WHERE id = %s",
+                    [username, email, hashed_password, pk]
+                )
+                return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
+            except IntegrityError as e:
+                return Response({"message": "Failed to update user"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class DeleteUserView(APIView):
+    """даление пользователя"""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM api_myuser WHERE id = %s",
+                [pk]
+            )
+            if cursor.rowcount > 0:
+                return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
+            else:
+                logger.info(f' User not found with pk: %s', pk)
+                return Response({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class SearchUserView(APIView):
+    """Поиск пользователя по имени"""
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, username):
-        try:
-            user = User.objects.get(username=username)
-            return Response({"username": user.username, "email": user.email}, status=status.HTTP_200_OK)
-        except User.DoesNotExist:
-            logger.error('The user is empty: UserSearchView ', )
-            return Response({"message": "Пользователь не найден"}, status=status.HTTP_404_NOT_FOUND)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT id, username, email FROM api_myuser WHERE username = %s",
+                [username]
+            )
+            user_data = cursor.fetchone()
+
+        if user_data:
+            user = {
+                "id": user_data[0],
+                "username": user_data[1],
+                "email": user_data[2],
+            }
+            return Response(user, status=status.HTTP_200_OK)
+        else:
+            return Response({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)

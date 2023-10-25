@@ -22,12 +22,9 @@ logger = logging.getLogger(__name__)
 
 #  python manage.py spectacular --file schema.yml
 
-# TODO: filter and sort user
-# TODO: Check RESTFULL API
 # TODO: Readme
 # TODO: PEP8 check
-# TODO: check show swagger
-
+# TODO: TEST
 class SignUpView(generics.GenericAPIView):
     """Проводим регистрацию"""
     serializer_class = SignUpSerializer
@@ -54,31 +51,23 @@ class LoginView(APIView):
     serializer_class = LoginSerializer
 
     def post(self, request):
-        data = request.data
-        serializer = self.serializer_class(data=data)
-        if serializer.is_valid():
-            email = serializer.validated_data.get("email")
-            password = serializer.validated_data.get("password")
-            user = authenticate(request, email=email, password=password)
-            if user is not None:
-                # создаём токен для авторизации
-                tokens = create_jwt_pair_for_user(user)
-                logger.info('Successful created token for user:  %s', user)
-                response = {"message": "Login Successfully", "tokens": tokens}
-                return Response(data=response, status=status.HTTP_200_OK)
-            else:
-                logger.error('Invalid email or password for user:  %s', email)
-                return Response(data={"message": "Invalid email or password"},
-                                status=status.HTTP_401_UNAUTHORIZED)
+        email = request.data.get("email")
+        password = request.data.get("password")
+        user = authenticate(request, email=email, password=password)
+        if user is not None:
+            # создаём токен для авторизации
+            tokens = create_jwt_pair_for_user(user)
+            logger.info('Successful created token for user', )
+            response = {"message": "Login Successfully", "tokens": tokens}
+            return Response(data=response, status=status.HTTP_200_OK)
         else:
-            logger.error('Invalid data received for login')
-            return Response(data={"message": "Invalid data received for login"},
-                            status=status.HTTP_400_BAD_REQUEST)
+            logger.error('Invalid email or password for user:  ', )
+            return Response(data={"message": "Invalid email or password"},
+                            status=status.HTTP_401_UNAUTHORIZED)
 
     def get(self, request):
         # выводим информацию об авторизованном пользователе
         content = {"user": str(request.user), "auth": str(request.auth)}
-
         return Response(data=content, status=status.HTTP_200_OK)
 
 
@@ -100,7 +89,11 @@ class ListUsersView(generics.ListAPIView):
     ordering_fields = ['username', 'email']
 
     def get_queryset(self):
-        return User.objects.all()
+        queryset = User.objects.all()
+        username_filter = self.request.query_params.get('username')
+        if username_filter:
+            queryset = queryset.filter(username__icontains=username_filter)
+        return queryset
 
 
 #
@@ -119,11 +112,11 @@ class UserSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
     # для избавления от ошибки 'unable to guess serializer' при использовании swagger-ра
-    @extend_schema(responses=LoginSerializer)
+    @extend_schema(responses=UserListSerializer)
     def get(self, request, username):
         try:
             user = User.objects.get(username=username)
             return Response({"username": user.username, "email": user.email}, status=status.HTTP_200_OK)
         except User.DoesNotExist:
-            logger.error('The user is empty: UserSearchView %s ', user.username)
+            logger.error('The user is empty: UserSearchView ', )
             return Response({"message": "Пользователь не найден"}, status=status.HTTP_404_NOT_FOUND)

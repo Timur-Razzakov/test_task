@@ -34,10 +34,17 @@ class SignUpSerializer(serializers.ModelSerializer):
         return user
 
 
+class LoginSerializer(serializers.ModelSerializer):
+    """Для вывода пользователей"""
+
+    class Meta:
+        model = MyUser
+        fields = ["email", "username"]
+
+
 class UserListSerializer(serializers.ModelSerializer):
     """Для вывода пользователей"""
 
     class Meta:
         model = MyUser
         fields = ["id", "email", "username"]
-

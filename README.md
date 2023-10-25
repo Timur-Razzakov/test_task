@@ -108,6 +108,7 @@ sudo docker-compose stop
 
 ```http://0.0.0.0:8000/search_user/<str:username>``` - Ищем пользователя по имени
 
+```http://0.0.0.0:8000/users_list/ordering:username>``` - Сортировка по имени
 
 ```http://0.0.0.0:8000/jwt/create/``` - Создаём токен для пользователя
 

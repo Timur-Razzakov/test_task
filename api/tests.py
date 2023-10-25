@@ -1,5 +1,3 @@
-import json
-
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
@@ -10,30 +8,30 @@ User = get_user_model()
 
 class UserViewTests(APITestCase):
     """Создаём тестовые данные"""
+    token = None  # Атрибут для хранения токена
 
     def setUp(self):
-        # не удалось сохранить при получении токена, поэтому вручную прописал
-        self.token = ('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWN'
-                      'jZXNzIiwiZXhwIjoxNjk4MTgyNzY0LCJpYXQiOjE2OTgxNzU1NjQsImp0aSI'
-                      '6ImM4YjAzMzBjMGZhMTRlN2NhOGNkZmEyYzZmOWM2OTNkIiwidXNlcl9pZCI6'
-                      'MX0.GzqgiehW_9VyqAWOk-CbrjMqitvgk12EyKVuS9krlLI')
-        self.auth = self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
-
         self.user_data = {
             'username': 'A-timur',
             'email': 'timur@gmail.com',
             'password': 'testpassword',
         }
-        self.user_data_1 = {
-            'username': 'rumit',
-            'email': 'timur_01@gmail.com',
-            'password': 'testpassword',
-        }
-
         # создаём пользователя и хешируем пароль
         user = User(**self.user_data)
         user.set_password(self.user_data['password'])
         user.save()
+        # создаём токен для пользователя
+        response = self.client.post(reverse('jwt_create'), {
+            'email': self.user_data['email'],
+            'password': self.user_data['password']}, format='json')
+        # сохраняем access токен для дальнейшего использования
+        self.token = response.data['access']
+
+        self.user_data_1 = {
+            'username': 'rumit',
+            'email': 'B_timur_01@gmail.com',
+            'password': 'testpassword',
+        }
 
         self.user_1 = User.objects.create(**self.user_data_1)
 
@@ -43,41 +41,49 @@ class UserViewTests(APITestCase):
             'password': 'testpassword',
         }
 
-    def test_user_signup(self):
+    def test_user_registration(self):
         """Создаём пользователя"""
-        response = self.client.post('/api/signup/', self.user_data_2)
+        url = reverse('registration')
+        response = self.client.post(url, self.user_data_2, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-    def test_user_login(self):
-        response = self.client.post('/api/login/', {
-            'email': 'timur@gmail.com',
-            'password': 'testpassword',
-        })
-        # Получаем и сохраняем access токен
-        self.global_variable = response.data['tokens']['access']
+    def test_user_authorization(self):
+        """Получаем токен для авторизации"""
+        url = reverse('authorization')
+        response = self.client.post(url, {
+            'email': self.user_data['email'],
+            'password': self.user_data['password'],
+        }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_get_user_data(self):
-        auth = self.auth
-        response = self.client.get('/api/all_users/')
+    def test_get_users_data(self):
+        """Получаем всех пользователей"""
+        # подключаем наш токен
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+        response = self.client.get('/api/users_list/')
         self.assertEqual(response.status_code, 200)
+
+    def test_get_user_without_token(self):
+        """Проверяем получение пользователя без токена"""
+        response = self.client.get(f'/api/users_list/{self.user_1.id}', follow=True)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_get_user(self):
         """Получаем пользователя"""
-        auth = self.auth
-        response = self.client.get(f'/api/all_users/{self.user_1.id}', follow=True)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+        response = self.client.get(f'/api/users_list/{self.user_1.id}', follow=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['email'], self.user_1.email)
 
     def test_update_user(self):
         """Обновляем пользователя"""
 
-        url = reverse('edit_user', args=[self.user_1.id])
+        url = reverse('users', args=[self.user_1.id])
         updated_data = {
             'username': 'newtimur',
             'email': 'newtimur@gmail.com',
         }
-        auth = self.auth
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
         response = self.client.patch(url, updated_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user_1.refresh_from_db()
@@ -86,17 +92,47 @@ class UserViewTests(APITestCase):
 
     def test_delete_user(self):
         """Удаляем пользователя"""
-        auth = self.auth
-        url = reverse('edit_user', args=[self.user_1.id])
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+        url = reverse('users', args=[self.user_1.id])
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(User.objects.filter(id=self.user_1.id).exists())
 
     def test_search_users_by_username(self):
-        """ищем пользователя по имени"""
-        auth = self.auth
+        """Ищем пользователя по имени"""
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
         url = reverse('search', args=[self.user_1.username])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Проверяем, является ли ответ одним словарем
         self.assertTrue(isinstance(response.data, dict))
+
+    def test_sort_users_by_name(self):
+        """Сортируем пользователя по имени A-W"""
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+        url = reverse('users_list')
+        response = self.client.get(url, {'ordering': 'username'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        usernames = [user['username'] for user in response.data]
+        # проверяем, что имя с A стоит первым
+        self.assertEqual(usernames, ['A-timur', 'rumit'])
+
+    def test_sort_users_by_name_W_A(self):
+        """Сортируем от W-A"""
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+        url = reverse('users_list')
+        response = self.client.get(url, {'ordering': '-username'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        usernames = [user['username'] for user in response.data]
+        # проверяем, что имя с A стоит первым
+        self.assertEqual(usernames, ['rumit', 'A-timur'])
+
+    def test_sort_users_by_email(self):
+        """Сортируем по почте"""
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+        url = reverse('users_list')
+        response = self.client.get(url, {'ordering': 'email'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        emails = [user['email'] for user in response.data]
+        self.assertEqual(emails, ['B_timur_01@gmail.com', 'timur@gmail.com'])
+

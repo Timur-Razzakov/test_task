@@ -10,6 +10,6 @@ urlpatterns = [
     path("users_list/<int:pk>/", views.GetUserView.as_view(), name="users"),
     path("update_user/<int:pk>/", views.UpdateUserView.as_view(), name="update_user"),
     path("delete_user/<int:pk>/", views.DeleteUserView.as_view(), name="delete_user"),
-    path("search_user/<str:username>/", views.SearchUserView.as_view(), name="search_user"),
+    path("search_user/<str:username>/", views.SearchUserView.as_view(), name="search"),
 
 ]

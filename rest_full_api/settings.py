@@ -40,9 +40,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'api',
-    #jwt
+    # jwt
     "rest_framework.authtoken",
-    #swagger
+    # swagger
     "drf_spectacular",
 
 ]

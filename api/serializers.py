@@ -42,6 +42,14 @@ class LoginSerializer(serializers.ModelSerializer):
         fields = ["email", "username"]
 
 
+class UpdateSerializer(serializers.ModelSerializer):
+    """Для редактирования пользователя"""
+
+    class Meta:
+        model = MyUser
+        fields = ["email", "username", "password"]
+
+
 class UserListSerializer(serializers.ModelSerializer):
     """Для вывода пользователей"""
 

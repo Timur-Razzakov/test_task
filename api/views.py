@@ -22,8 +22,6 @@ logger = logging.getLogger(__name__)
 
 #  python manage.py spectacular --file schema.yml
 
-# TODO: Readme
-# TODO: PEP8 check
 class SignUpView(generics.GenericAPIView):
     """Проводим регистрацию"""
     serializer_class = SignUpSerializer

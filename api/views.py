@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 # TODO: Readme
 # TODO: PEP8 check
-# TODO: TEST
 class SignUpView(generics.GenericAPIView):
     """Проводим регистрацию"""
     serializer_class = SignUpSerializer

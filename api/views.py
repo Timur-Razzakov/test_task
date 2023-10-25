@@ -1,14 +1,16 @@
 import logging
 
-from django.contrib.auth import get_user_model
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth import get_user_model, authenticate
+from django.contrib.auth.hashers import make_password, check_password
 from django.db import connection, IntegrityError
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.filters import OrderingFilter
 
+from api.serializers import LoginSerializer
 from api.tokens import create_jwt_pair_for_user
 
 User = get_user_model()
@@ -44,43 +46,48 @@ class CreateUserView(APIView):
 
 class LoginView(APIView):
     permission_classes = []
+    serializer_class = LoginSerializer
 
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
 
-        # Поиск пользователя по email
+        # Создаем SQL-запрос для аутентификации пользователя
         with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT * FROM auth_user WHERE email = %s",
-                [email]
-            )
+            cursor.execute("SELECT id, username,password FROM api_myuser WHERE email = %s ", [email])
             user_data = cursor.fetchone()
-
         if user_data:
-            user = User.objects.get(pk=user_data[0])
-
-            # Проверка пароль
-            if make_password(password) == user_data[1]:
+            # проряем пользователя и его данные
+            user = authenticate(request, email=email, password=password)
+            if user is not None:
+                # Создаем токен для авторизации
                 tokens = create_jwt_pair_for_user(user)
-                logger.info(f'Successful created token for user: {user.username}')
-                response = {"message": "Login Successfully", "tokens": tokens}
-                return Response(data=response, status=status.HTTP_200_OK)
+                logger.info(f'Successful created token for user')
+                response_data = {"message": "Login Successfully", "tokens": tokens}
+                return Response(data=response_data, status=status.HTTP_200_OK)
             else:
-                logger.error(f'Invalid email or password for user: {user.username}')
+                logger.error(f'Invalid email or password for user: {email}')
                 return Response(data={"message": "Invalid email or password"},
                                 status=status.HTTP_401_UNAUTHORIZED)
         else:
-            return Response(data={"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(data={"message": "User is not found"},
+                            status=status.HTTP_404_NOT_FOUND)
 
     def get(self, request):
-        content = {"user": str(request.user), "auth": str(request.auth)}
-        return Response(data=content, status=status.HTTP_200_OK)
+        # Выводим информацию об авторизованном пользователе
+        if request.user.is_authenticated:
+            content = {"user": str(request.user), "auth": str(request.auth)}
+            return Response(data=content, status=status.HTTP_200_OK)
+        else:
+            return Response(data={"message": "User is not authenticated"},
+                            status=status.HTTP_401_UNAUTHORIZED)
 
 
 class GetAllUsersView(APIView):
     """Получаем всех пользователей"""
     permission_classes = [IsAuthenticated]
+    filter_backends = [OrderingFilter]
+    ordering_fields = ['username', 'email']
 
     def get(self, request):
         with connection.cursor() as cursor:
